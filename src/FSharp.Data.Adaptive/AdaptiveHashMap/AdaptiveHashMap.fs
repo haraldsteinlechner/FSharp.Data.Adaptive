@@ -874,6 +874,11 @@ module AdaptiveHashMapImplementation =
             :> seq<_>
             |> HashMap.ofSeq
             |> HashMap.computeDelta x.State
+            
+        override x.ComputeUnit(token) =
+            input.GetValue token
+            :> seq<_>
+            |> HashMap.ofSeq
 
     /// Reader for bind.
     [<Sealed>]
@@ -886,23 +891,24 @@ module AdaptiveHashMapImplementation =
             let v = value.GetValue token
             
             match oldValue with
-            | Some (ov, r) when DefaultEquality.equals ov v ->
-                r.GetChanges(token)
-            | _ ->
-                let rem =
-                    match oldValue with
-                    | Some (_, oldReader) ->
-                        let res = HashMap.computeDelta oldReader.State HashMap.empty
-                        oldReader.Outputs.Remove x |> ignore
-                        res.Store
-                    | _ ->
-                        HashMap.empty
-                                
+            | Some (ov, r) ->
+                if DefaultEquality.equals ov v then
+                    r.GetChanges(token)
+                else
+                    let newMap = mapping v
+                    let newReader = newMap.GetReader()
+                    newReader.Update token
+
+                    let ops = HashMap.computeDelta r.State newReader.State
+                    r.Outputs.Remove x |> ignore
+                    oldValue <- Some(v, newReader)
+                    ops
+            | None ->
                 let newMap = mapping v
                 let newReader = newMap.GetReader()
                 oldValue <- Some(v, newReader)
-                let add = newReader.GetChanges token
-                HashMapDelta.combine (HashMapDelta rem) add
+                newReader.GetChanges token
+
 
     /// Reader for toASet.
     [<Sealed>]

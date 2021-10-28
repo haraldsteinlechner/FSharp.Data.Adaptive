@@ -22,6 +22,9 @@ type IOpReader<'State, 'Delta> =
     /// The latest state of the Reader.
     /// Note that the state gets updated after each evaluation (GetChanges)
     abstract member State: 'State
+    
+    /// Dependency-aware evaluation of the reader
+    abstract member Update: AdaptiveToken -> unit
 
 /// Abstract base class for implementing IOpReader<_>
 [<AbstractClass>]
@@ -59,6 +62,17 @@ type AbstractReader<'State, 'Delta>(trace: Traceable<'State, 'Delta>) =
         let (s, o) = trace.tapplyDelta state o
         state <- s
         o
+        
+    abstract member ComputeUnit: AdaptiveToken -> 'State
+    default x.ComputeUnit(token) =
+        let ops = x.Compute(token)
+        trace.tapplyDelta x.State ops |> fst
+
+    member x.Update(token: AdaptiveToken) =
+        x.EvaluateAlways token (fun token ->
+            if x.OutOfDate then
+                state <- x.ComputeUnit token 
+        )   
 
     /// The reader's current content.
     member x.State = state
@@ -66,6 +80,7 @@ type AbstractReader<'State, 'Delta>(trace: Traceable<'State, 'Delta>) =
     interface IOpReader<'State, 'Delta> with
         member x.Trace = trace
         member x.State = state
+        member x.Update(t) = x.Update(t)
 
 /// Abstract base class for implementing IOpReader<_> when dirty inputs are needed on evaluation.
 [<AbstractClass>]
@@ -397,7 +412,28 @@ type History<'State, 'Delta> private(input: option<Lazy<IOpReader<'Delta>>>, t: 
                 let node = addRefToLast()
                 node, res
         )
-        
+    
+    member internal x.ReadUnit(token: AdaptiveToken, old: RelevantNode<'State, 'Delta>, oldState: 'State) =
+        x.EvaluateAlways token (fun token ->
+            x.Update token
+
+            if isInvalid old then
+                let node = addRefToLast()
+                node
+            else
+                let mutable current = old
+
+                while not (isNull current) do
+                    let (o,c) = mergeIntoPrev current
+                    current <- c
+                    if not (isNull c) then 
+                        c.RefCount <- c.RefCount + 1
+
+                let node = addRefToLast()
+                node
+        )
+    
+
     /// Adaptively gets the history'State current state
     member x.GetValue(token: AdaptiveToken) =
         x.EvaluateAlways token (fun token ->
@@ -461,6 +497,14 @@ and internal HistoryReader<'State, 'Delta>(h: History<'State, 'Delta>) =
             else
                 trace.tmonoid.mempty
         )
+        
+    member x.Update(token: AdaptiveToken) =
+        x.EvaluateAlways token (fun token ->
+            if x.OutOfDate then
+                let nt = h.ReadUnit(token, node, state)
+                node <- nt
+                state <- h.State
+        )
 
     interface IOpReader<'Delta> with
         member x.GetChanges c = x.GetChanges c
@@ -468,6 +512,7 @@ and internal HistoryReader<'State, 'Delta>(h: History<'State, 'Delta>) =
     interface IOpReader<'State, 'Delta> with
         member x.Trace = trace
         member x.State = state
+        member x.Update(t) = x.Update(t)
 
 /// HistoryReader implements IOpReader<_,_> and takes care of managing versions correctly.
 and internal HistoryReader<'State, 'Delta, 'ViewState, 'ViewDelta>(h: History<'State, 'Delta>, mapping : 'State -> 'Delta -> 'ViewDelta, trace : Traceable<'ViewState, 'ViewDelta>) =
@@ -504,6 +549,7 @@ and internal HistoryReader<'State, 'Delta, 'ViewState, 'ViewDelta>(h: History<'S
     interface IOpReader<'ViewState, 'ViewDelta> with
         member x.Trace = trace
         member x.State = viewState
+        member x.Update(t) = x.GetChanges(t) |> ignore
 
 /// Functional operators related to the History<_,_> type.
 module History =
@@ -520,6 +566,7 @@ module History =
             interface IOpReader<'State, 'Delta> with
                 member x.Trace = t
                 member x.State = t.tempty
+                member x.Update(_caller) = ()
 
         /// A constant reader.
         type ConstantReader<'State, 'Delta>(t: Traceable<'State, 'Delta>, ops: Lazy<'Delta>, finalState: Lazy<'State>) =
@@ -542,6 +589,13 @@ module History =
             interface IOpReader<'State, 'Delta> with
                 member x.Trace = t
                 member x.State = state
+                member x.Update(caller) =
+                    lock x (fun () ->
+                        if initial then
+                            initial <- false
+                            state <- finalState.Value
+                    )
+
     
     /// Creates a history depending on the given reader. 
     /// The history will internally use the given traceable instance.

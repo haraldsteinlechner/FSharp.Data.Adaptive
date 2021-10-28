@@ -985,13 +985,14 @@ module internal AdaptiveIndexListImplementation =
             | _ -> 
                 let newReader = mapping(v).GetReader()
                 let deltas = 
-                    let addNew = newReader.GetChanges token
                     match reader with
                         | Some(_,old) ->
-                            let remOld = IndexList.computeDelta old.State IndexList.empty
+                            newReader.Update token
+                            let delta = IndexList.computeDelta old.State newReader.State
                             old.Outputs.Clear()
-                            IndexListDelta.combine remOld addNew
+                            delta
                         | None ->
+                            let addNew = newReader.GetChanges token
                             addNew
                 reader <- Some (v,newReader)
                 deltas
@@ -1175,6 +1176,67 @@ module internal AdaptiveIndexListImplementation =
             
             
             delta
+            
+        override x.ComputeUnit(token: AdaptiveToken) =
+            let o = reader.State
+            let ops = reader.GetChanges token
+            let s = reader.State
+
+            let mutable state = x.State
+
+            let inline neighbours (i : Index) =
+                let (l, _, r) = IndexList.neighbours i s
+
+                let r =
+                    match r with
+                    | None when cyclic -> s.Content.TryMin()
+                    | _ -> r
+                    
+                let l =
+                    match l with
+                    | None when cyclic -> s.Content.TryMax()
+                    | _ -> l
+
+                l, r
+
+            for i, op in ops do
+                match op with
+                | Remove ->
+                    match IndexList.tryGet i o with
+                    | Some _ov ->
+                        let (l, r) = neighbours i
+                        state <- IndexList.remove i state
+                        match l with
+                        | Some (li, lv) ->
+                            match r with
+                            | Some (_ri, rv) ->
+                                state <- IndexList.set li (lv, rv) state
+                            | None ->
+                                state <- IndexList.remove li state
+                        | None ->
+                            ()
+                    | None ->
+                        ()
+                | Set v ->
+                    let (l, r) = neighbours i
+                    match IndexList.tryGet i o with
+                    | Some ov when CheapEquality.cheapEqual ov v ->
+                        ()
+                    | _ ->
+                        match r with
+                        | Some (_ri, rv) ->
+                            state <- IndexList.set i (v, rv) state
+                        | None ->
+                            ()
+                    
+                        match l with
+                        | Some(li, lv) ->
+                            state <- IndexList.set li (lv, v) state
+                        | None ->
+                            ()
+               
+            state
+
 
 
     /// Gets the current content of the alist as IndexList.

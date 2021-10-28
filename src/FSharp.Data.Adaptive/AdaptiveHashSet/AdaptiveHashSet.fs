@@ -885,12 +885,12 @@ module AdaptiveHashSetImplementation =
             match cache with
             | Some(oldValue, oldReader) when valChanged && not (cheapEqual oldValue newValue) ->
                 // input changed
-                let rem = CountingHashSet.removeAll oldReader.State
-                oldReader.Outputs.Remove x |> ignore
                 let newReader = (mapping newValue).GetReader()
-                let add = newReader.GetChanges token
+                newReader.Update token
+                let ops = CountingHashSet.computeDelta oldReader.State newReader.State
+                oldReader.Outputs.Remove x |> ignore
                 cache <- Some(newValue, newReader)
-                HashSetDelta.combine rem add
+                ops
 
             | Some(_, ro) ->    
                 // input unchanged

@@ -163,6 +163,11 @@ module CollectionExtensions =
                 reader.GetChanges token 
                 |> HashMapDelta.toSeq
                 |> IndexListDelta.ofSeq
+
+            override x.ComputeUnit(token : AdaptiveToken) =
+                reader.Update(token)
+                reader.State |> IndexList.ofSeqIndexed
+
                 
         [<Sealed>]
         type ListToMapReader<'T>(input : alist<'T>) =
@@ -172,6 +177,11 @@ module CollectionExtensions =
                 reader.GetChanges token 
                 |> IndexListDelta.toSeq
                 |> HashMapDelta.ofSeq
+            override x.ComputeUnit(token : AdaptiveToken) =
+                reader.Update token
+                reader.State
+                |> IndexList.toSeqIndexed
+                |> HashMap.ofSeq
 
 
     /// Functional operators for amap<_,_>
