@@ -1128,6 +1128,9 @@ module ASet =
             { new AbstractReader<CountingHashSet<'a>,HashSetDelta<'a>>(CountingHashSet.trace) with
                 override x.Compute(t) = 
                     compute t x.State
+                override x.ComputeUnit(t) =
+                    let ops = x.Compute(t)
+                    CountingHashSet.applyDelta x.State ops |> fst
             }
         )
 

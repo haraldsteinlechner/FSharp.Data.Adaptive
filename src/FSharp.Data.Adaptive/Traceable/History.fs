@@ -64,9 +64,9 @@ type AbstractReader<'State, 'Delta>(trace: Traceable<'State, 'Delta>) =
         o
         
     abstract member ComputeUnit: AdaptiveToken -> 'State
-    default x.ComputeUnit(token) =
-        let ops = x.Compute(token)
-        trace.tapplyDelta x.State ops |> fst
+    //default x.ComputeUnit(token) =
+    //    let ops = x.Compute(token)
+    //    trace.tapplyDelta x.State ops |> fst
 
     member x.Update(token: AdaptiveToken) =
         x.EvaluateAlways token (fun token ->

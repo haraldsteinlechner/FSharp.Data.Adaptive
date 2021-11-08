@@ -3409,13 +3409,16 @@ type HashSet<'K> internal(comparer : IEqualityComparer<'K>, root : SetNode<'K>) 
 
     [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
     static member OfSeq(elements : seq<'K>) =
-        let cmp = DefaultEqualityComparer<'K>.Instance
-        let mutable root = null
-        for e in elements do 
-            let hash = uint32 (cmp.GetHashCode e) &&& 0x7FFFFFFFu
-            let struct(ok, n) = SetNode.addInPlace cmp hash e root
-            root <- n
-        HashSet(cmp, root)
+        match elements with
+        | :? HashSet<'K> as o -> o
+        | _ ->
+            let cmp = DefaultEqualityComparer<'K>.Instance
+            let mutable root = null
+            for e in elements do 
+                let hash = uint32 (cmp.GetHashCode e) &&& 0x7FFFFFFFu
+                let struct(ok, n) = SetNode.addInPlace cmp hash e root
+                root <- n
+            HashSet(cmp, root)
 
     [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
     static member OfList(elements : list<'K>) =
@@ -3724,13 +3727,17 @@ and [<Struct; DebuggerDisplay("Count = {Count}"); DebuggerTypeProxy(typedefof<Ha
 
     [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
     static member OfSeq(elements : seq<'K * 'V>) =
-        let cmp = DefaultEqualityComparer<'K>.Instance
-        let mutable root = null
-        for (k, v) in elements do 
-            let hash = uint32 (cmp.GetHashCode k) &&& 0x7FFFFFFFu
-            let struct(ok, n) = MapNode.addInPlace cmp hash k v root
-            root <- n
-        HashMap<'K, 'V>(cmp, root)
+        match elements with
+        | :? HashMap<'K, 'V> as o ->
+            o
+        | _ ->
+            let cmp = DefaultEqualityComparer<'K>.Instance
+            let mutable root = null
+            for (k, v) in elements do 
+                let hash = uint32 (cmp.GetHashCode k) &&& 0x7FFFFFFFu
+                let struct(ok, n) = MapNode.addInPlace cmp hash k v root
+                root <- n
+            HashMap<'K, 'V>(cmp, root)
 
     [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
     static member OfList(elements : list<'K * 'V>) =

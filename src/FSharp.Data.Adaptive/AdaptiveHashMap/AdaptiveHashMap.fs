@@ -1171,6 +1171,9 @@ module AMap =
             { new AbstractReader<HashMap<'Key, 'Value>,HashMapDelta<'Key, 'Value>>(HashMap.trace) with
                 override x.Compute(t) = 
                     compute t x.State
+                override x.ComputeUnit(t) =
+                    let ops = x.Compute(t)
+                    HashMap.applyDelta x.State ops |> fst
             }
         )
 

@@ -1170,9 +1170,13 @@ module IndexList =
 
     /// creates a list from the given elements.
     let ofSeq (seq : seq<'T>) =
-        let mutable res = empty
-        for e in seq do res <- add e res
-        res
+        match seq with
+        | :? IndexList<'T> as s ->
+            s
+        | _ -> 
+            let mutable res = empty
+            for e in seq do res <- add e res
+            res
         
     /// creates a list from the given elements.
     let inline ofList (list : list<'T>) = 

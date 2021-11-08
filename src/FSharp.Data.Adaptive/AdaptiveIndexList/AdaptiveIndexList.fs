@@ -655,12 +655,15 @@ module internal AdaptiveIndexListImplementation =
                             None
                 )
 
-            dirty.Content |> MapExt.iter (fun i d ->
-                    let v = d.GetValue t
-                    changes <- IndexListDelta.add i (Set v) changes
-                )
+            if IndexListDelta.isEmpty changes then
+                dirty.Content |> MapExt.map (fun _ v -> Set (v.GetValue t)) |> IndexListDelta.ofMap
+            else 
+                dirty.Content |> MapExt.iter (fun i d ->
+                        let v = d.GetValue t
+                        changes <- IndexListDelta.add i (Set v) changes
+                    )
 
-            changes
+                changes
      
     /// Reader for chooseA operations.
     [<Sealed>]
@@ -972,6 +975,31 @@ module internal AdaptiveIndexListImplementation =
             if System.Object.ReferenceEquals(input, o) then
                 inputChanged <- 1
 
+
+        //override x.Compute(token) =
+        //    let v = input.GetValue token
+        //    #if FABLE_COMPILER
+        //    let inputChanged = let v = inputChanged in inputChanged <- 0; v
+        //    #else
+        //    let inputChanged = System.Threading.Interlocked.Exchange(&inputChanged, 0)
+        //    #endif
+        //    match reader with
+        //    | Some (oldA, oldReader) when inputChanged = 0 || cheapEqual v oldA ->
+        //        oldReader.GetChanges token
+        //    | _ -> 
+        //        let newReader = mapping(v).GetReader()
+        //        let deltas = 
+        //            let addNew = newReader.GetChanges token
+        //            match reader with
+        //                | Some(_,old) ->
+        //                    let remOld = IndexList.computeDelta old.State IndexList.empty
+        //                    old.Outputs.Clear()
+        //                    IndexListDelta.combine remOld addNew
+        //                | None ->
+        //                    addNew
+        //        reader <- Some (v,newReader)
+        //        deltas
+
         override x.Compute(token) =
             let v = input.GetValue token
             #if FABLE_COMPILER
@@ -987,7 +1015,7 @@ module internal AdaptiveIndexListImplementation =
                 let deltas = 
                     match reader with
                         | Some(_,old) ->
-                            newReader.Update token
+                            newReader.Update token |> ignore
                             let delta = IndexList.computeDelta old.State newReader.State
                             old.Outputs.Clear()
                             delta
@@ -1260,6 +1288,9 @@ module AList =
             { new AbstractReader<IndexList<'a>,IndexListDelta<'a>>(IndexList.trace) with
                 override x.Compute(t) = 
                     compute t x.State
+                override x.ComputeUnit(t) =
+                    let ops = x.Compute(t)
+                    IndexList.applyDelta x.State ops |> fst
             }
         )
 

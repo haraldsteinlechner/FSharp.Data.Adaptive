@@ -7,6 +7,8 @@ open FSharp.Data.Adaptive
 [<EntryPoint>]
 let main _args =
 
+
+
     //let a = cval [1;2;3;4]
     //let b = AVal.cast<seq<int>> a
 
@@ -42,6 +44,7 @@ let main _args =
     //BenchmarkRunner.Run<Benchmarks.HashMapDeltaEnumeratorBenchmark>() |> ignore
     //BenchmarkRunner.Run<Benchmarks.MapExtEnumeratorBenchmark>() |> ignore
 
-    BenchmarkRunner.Run<Benchmarks.HashSetDeltaBench>() |> ignore
+    //BenchmarkRunner.Run<Benchmarks.HashSetDeltaBench>() |> ignore
+    BenchmarkRunner.Run<Benchmarks.BindOptBenchmark>() |> ignore
 
     0
